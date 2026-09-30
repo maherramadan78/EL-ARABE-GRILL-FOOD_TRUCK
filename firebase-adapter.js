@@ -4,6 +4,12 @@ import {
   initializeApp
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
 import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+import {
   doc,
   getDoc,
   getFirestore,
@@ -22,6 +28,10 @@ window.firebaseReady = Promise.resolve({
   initializeApp,
   getApp,
   getApps,
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
   getFirestore,
   doc,
   getDoc,

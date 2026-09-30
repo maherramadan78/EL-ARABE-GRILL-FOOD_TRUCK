@@ -178,6 +178,7 @@ function seedDatabase() {
         id: "user-admin",
         name: "Administrador",
         role: "admin",
+        email: "admin@elarabegrill.com",
         pin: "1234",
         active: true,
         permissions: ROLE_PERMISSIONS.admin
@@ -186,6 +187,7 @@ function seedDatabase() {
         id: "user-caja",
         name: "Caja",
         role: "cajero",
+        email: "caja@elarabegrill.com",
         pin: "1111",
         active: true,
         permissions: ROLE_PERMISSIONS.cajero
@@ -451,8 +453,21 @@ async function initializeCloud(options = {}) {
       : firebaseApi.initializeApp(firebaseConfigPayload());
     const firestore = firebaseApi.getFirestore(firebaseApp);
     const storage = firebaseApi.getStorage(firebaseApp);
+    const auth = firebaseApi.getAuth(firebaseApp);
     const stateRef = firebaseApi.doc(firestore, FIREBASE_STATE_COLLECTION, FIREBASE_STATE_DOC);
-    cloud = { ...cloud, client: firestore, storage, firebase: firebaseApi, stateRef };
+    cloud = { ...cloud, client: firestore, storage, auth, firebase: firebaseApi, stateRef };
+
+    if (firebaseApi.onAuthStateChanged) {
+      firebaseApi.onAuthStateChanged(auth, (user) => {
+        if (!user) {
+          const currentUserId = db.session?.currentUserId;
+          if (currentUserId) {
+            db.session.currentUserId = null;
+            saveDatabase({ syncCloud: false });
+          }
+        }
+      });
+    }
 
     const snapshot = await firebaseApi.getDoc(stateRef);
     if (snapshot.exists()) {
@@ -630,11 +645,15 @@ function renderLogin() {
         </div>
         <div>
           <h2>Entrar al sistema</h2>
-          <p class="muted">PIN inicial administrador: <strong>1234</strong>. PIN caja: <strong>1111</strong>.</p>
+          <p class="muted">Usa tu cuenta de Firebase creada en Authentication. Si no existe una cuenta, crea primero un usuario administrador o de caja.</p>
         </div>
         <label class="field">
-          <span>PIN</span>
-          <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" required autofocus />
+          <span>Correo electrónico</span>
+          <input name="email" type="email" autocomplete="email" required autofocus />
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input name="password" type="password" autocomplete="current-password" required />
         </label>
         <button class="button primary" type="submit">${icon("login")} Entrar</button>
         <button class="button ghost" type="button" data-route="menu">${icon("phone")} Ver menu digital</button>
@@ -1724,6 +1743,13 @@ async function handleClick(event) {
   const { action, id } = button.dataset;
 
   if (action === "logout") {
+    if (cloud.auth && cloud.firebase?.signOut) {
+      try {
+        await cloud.firebase.signOut(cloud.auth);
+      } catch (error) {
+        console.warn("No se pudo cerrar sesion de Firebase", error);
+      }
+    }
     db.session.currentUserId = null;
     saveDatabase();
     setRoute("dashboard");
@@ -1919,13 +1945,46 @@ async function handleSubmit(event) {
   const data = new FormData(form);
 
   if (formName === "login") {
-    const pin = String(data.get("pin") || "").trim();
-    const user = db.users.find((item) => item.pin === pin && item.active);
-    if (!user) {
-      toast("PIN incorrecto o usuario inactivo.");
+    const email = String(data.get("email") || "").trim().toLowerCase();
+    const password = String(data.get("password") || "").trim();
+
+    if (hasCloudConfig() && cloud.firebase?.signInWithEmailAndPassword && cloud.auth) {
+      try {
+        await cloud.firebase.signInWithEmailAndPassword(cloud.auth, email, password);
+      } catch (error) {
+        toast("Credenciales de Firebase incorrectas o la cuenta no existe.");
+        return;
+      }
+    } else {
+      const pin = String(data.get("pin") || "").trim();
+      const user = db.users.find((item) => item.pin === pin && item.active);
+      if (!user) {
+        toast("PIN incorrecto o usuario inactivo.");
+        return;
+      }
+      db.session.currentUserId = user.id;
+      saveDatabase();
+      setRoute(firstAllowedRoute());
       return;
     }
-    db.session.currentUserId = user.id;
+
+    const matchedUser = db.users.find((item) => (
+      item.email && item.email.toLowerCase() === email && item.active
+    ));
+
+    if (!matchedUser) {
+      toast("La cuenta de Firebase no tiene un usuario autorizado en este POS.");
+      if (cloud.auth && cloud.firebase?.signOut) {
+        try {
+          await cloud.firebase.signOut(cloud.auth);
+        } catch (error) {
+          console.warn("No se pudo cerrar la sesion de Firebase tras error", error);
+        }
+      }
+      return;
+    }
+
+    db.session.currentUserId = matchedUser.id;
     saveDatabase();
     setRoute(firstAllowedRoute());
     return;

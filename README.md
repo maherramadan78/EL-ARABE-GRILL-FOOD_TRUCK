@@ -6,10 +6,14 @@ App tipo punto de venta para un food truck de comida arabe. Incluye POS, menu di
 
 Abre `index.html` en el navegador.
 
-PIN inicial:
+Inicia sesion con tu cuenta creada en Firebase Authentication.
 
-- Administrador: `1234`
-- Caja: `1111`
+Credenciales recomendadas:
+
+- Administrador: tu correo de Firebase con permisos de admin
+- Caja: tu correo de Firebase con permisos de caja
+
+No uses PINs hardcodeados para acceso real. Los PIN locales solo quedan como compatibilidad si Firebase no esta configurado.
 
 ## Flujo recomendado
 
@@ -53,21 +57,19 @@ La app ya quedo apuntando al proyecto Firebase nuevo:
 Pasos:
 
 1. Abre el POS con internet disponible.
-2. Entra con el PIN administrador `1234`.
-3. Ve a `Ajustes > Firebase`.
-4. Revisa que aparezca el Project ID `food-truck-pos-55717`.
-5. Presiona `Subir datos actuales` para mandar tus datos locales a Firestore.
+2. En Firebase Console, crea usuarios en `Authentication > Users` con email/contraseña.
+3. En el POS, inicia sesion con esos correos.
+4. Ve a `Ajustes > Firebase`.
+5. Revisa que aparezca el Project ID `food-truck-pos-55717`.
+6. Presiona `Subir datos actuales` para mandar tus datos locales a Firestore.
 
-Para que el navegador pueda leer/escribir desde esta app estatica, despliega las reglas locales:
+Para desplegar reglas seguras:
 
 ```powershell
 firebase.cmd deploy --only firestore:rules,storage --project food-truck-pos-55717
 ```
 
-Las reglas incluidas permiten acceso publico solo a:
-
-- Firestore: `foodtruck_pos`
-- Storage: `foodtruck-dish-photos`
+Las reglas actuales permiten lectura publica del menu, pero solo escritura autenticada por usuarios de Firebase.
 
 ## Notas importantes
 
