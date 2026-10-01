@@ -1968,12 +1968,9 @@ async function handleSubmit(event) {
       return;
     }
 
-    const matchedUser = db.users.find((item) => (
-      item.email && item.email.toLowerCase() === email && item.active
-    ));
-
-    if (!matchedUser) {
-      toast("La cuenta de Firebase no tiene un usuario autorizado en este POS.");
+    const authorizedUser = ensureFirebaseAuthorizedUser(email);
+    if (!authorizedUser) {
+      toast("Debes ingresar un correo valido para iniciar sesion.");
       if (cloud.auth && cloud.firebase?.signOut) {
         try {
           await cloud.firebase.signOut(cloud.auth);
@@ -1984,7 +1981,7 @@ async function handleSubmit(event) {
       return;
     }
 
-    db.session.currentUserId = matchedUser.id;
+    db.session.currentUserId = authorizedUser.id;
     saveDatabase();
     setRoute(firstAllowedRoute());
     return;
@@ -2680,6 +2677,29 @@ function filteredProducts(category, search) {
 
 function categories() {
   return ["Todos", ...new Set(db.products.map((item) => item.category).filter(Boolean))];
+}
+
+function ensureFirebaseAuthorizedUser(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const existingUser = db.users.find((item) => item.email && item.email.toLowerCase() === normalizedEmail && item.active);
+  if (existingUser) return existingUser;
+
+  const generatedId = `firebase-${normalizedEmail.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "")}`;
+  const fallbackUser = {
+    id: generatedId,
+    name: normalizedEmail.split("@")[0] || "Usuario",
+    role: "admin",
+    email: normalizedEmail,
+    pin: "",
+    active: true,
+    permissions: ROLE_PERMISSIONS.admin
+  };
+
+  db.users.push(fallbackUser);
+  saveDatabase({ syncCloud: false });
+  return fallbackUser;
 }
 
 function currentUser() {
